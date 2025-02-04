@@ -79,5 +79,83 @@ group by "Ano/Mes"
 order by "Ano/Mes";
 
 --- 09 - Calcule a porcentagem de vendas por categorias no ano de 2022.
+with Vendas_Total as
+  (select count(*) as Total from itens_venda iv inner join vendas v
+  on iv.venda_id = v.id_venda
+  where strftime('%Y', v.data_venda) like '2022'),
+Vendas_Categorias as
+  (SELECT c.nome_categoria as Categoria, count(*) as Qtd_Vendas
+  from categorias c inner join produtos p
+  on p.categoria_id = c.id_categoria
+  inner join itens_venda iv
+  on iv.produto_id = p.id_produto
+  inner join vendas v
+  on iv.venda_id = v.id_venda
+  where strftime('%Y', v.data_venda) like '2022'
+  group by c.id_categoria)
+select vc.Categoria, vc.Qtd_Vendas,
+	round((vc.Qtd_Vendas*100.0)/vt.Total, 2) || '%' as Porcentagem
+from Vendas_Categorias as vc, Vendas_Total as vt;
 
 --- 10 - Crie uma métrica mostrando a porcentagem de vendas a mais que a melhor categoria tem em relação a pior no ano de 2022.
+with Vendas_Total as
+  (select count(*) as Total from itens_venda iv inner join vendas v
+  on iv.venda_id = v.id_venda
+  where strftime('%Y', v.data_venda) like '2022'),
+Vendas_Categorias as
+  (SELECT c.nome_categoria as Categoria, count(*) as Qtd_Vendas
+  from categorias c inner join produtos p
+  on p.categoria_id = c.id_categoria
+  inner join itens_venda iv
+  on iv.produto_id = p.id_produto
+  inner join vendas v
+  on iv.venda_id = v.id_venda
+  where strftime('%Y', v.data_venda) like '2022'
+  group by c.id_categoria),
+Melhor_Pior_Categorias as
+  (SELECT 
+   	min(Qtd_Vendas) as Pior_Vendas,
+   	max(Qtd_Vendas) as Melhor_Vendas
+  from Vendas_Categorias)
+select
+	vc.Categoria,
+	vc.Qtd_Vendas,
+    round((vc.Qtd_Vendas*100.0/vt.Total),2) || '%' as Porcentagem,
+    round(((vc.Qtd_Vendas - mp.Melhor_Vendas)*100.0/mp.Melhor_Vendas),2) || '%' as Porcentagem_Relativa_Ao_Melhor
+from Vendas_Categorias as vc, Vendas_Total as vt, Melhor_Pior_Categorias as mp
+order by Categoria;
+
+--SOLUCAO FORNECIDA:
+WITH Total_Vendas AS (
+  SELECT COUNT(*) as Total_Vendas_2022
+  FROM itens_venda iv
+  JOIN vendas v ON v.id_venda = iv.venda_id
+  WHERE strftime('%Y', v.data_venda) = '2022'
+),
+Vendas_Por_Categoria AS (
+  SELECT 
+    c.nome_categoria AS Nome_Categoria, 
+    COUNT(iv.produto_id) AS Qtd_Vendas
+  FROM itens_venda iv
+  JOIN vendas v ON v.id_venda = iv.venda_id
+  JOIN produtos p ON p.id_produto = iv.produto_id
+  JOIN categorias c ON c.id_categoria = p.categoria_id
+  WHERE strftime('%Y', v.data_venda) = '2022'
+  GROUP BY Nome_Categoria
+),
+Melhor_Pior_Categorias AS (
+  SELECT 
+    MIN(Qtd_Vendas) AS Pior_Vendas, 
+    MAX(Qtd_Vendas) AS Melhor_Vendas
+  FROM Vendas_Por_Categoria
+)
+-- O CROSS JOIN é utilizado aqui para combinar todas as linhas de Total_Vendas, 
+-- Vendas_Por_Categoria e Melhor_Pior_Categorias, resultando em um único conjunto de dados.
+SELECT 
+  Nome_Categoria, 
+  Qtd_Vendas, 
+  ROUND(100.0*Qtd_Vendas/tv.Total_Vendas_2022, 2) || '%' AS Porcentagem,
+  ROUND(100.0*(Qtd_Vendas - Melhor_Vendas) / Melhor_Vendas, 2) || '%' AS Porcentagem_Mais_Que_Melhor
+FROM Vendas_Por_Categoria
+CROSS JOIN Total_Vendas tv
+CROSS JOIN Melhor_Pior_Categorias;
